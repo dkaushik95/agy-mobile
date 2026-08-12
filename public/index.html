@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Gemini Workspace</title>
+    <link rel="stylesheet" href="styles.css?v=2">
+    
+    <!-- PWA Settings -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon.svg">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Highlight.js for Code -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <!-- Marked.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        
+        <!-- Top App Bar -->
+        <header class="app-header">
+            <div class="header-left">
+                <button class="menu-btn" id="menu-btn" aria-label="Menu">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+                <div class="header-title" id="advanced-toggle">
+                    Gemini Advanced
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="action-icon-btn" id="new-chat-btn" aria-label="New Chat">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+                <div class="profile-pic">G</div>
+            </div>
+        </header>
+
+        <!-- Advanced Controls Drawer -->
+        <div class="controls-drawer" id="controls-drawer">
+            <div class="control-chip active model-chip" data-model="pro">Gemini 3.1 Pro</div>
+            <div class="control-chip model-chip" data-model="flash">Gemini 3.6 Flash</div>
+            
+            <div style="width:1px; height:20px; background:var(--border-color); margin: 0 4px;"></div>
+            
+            <div class="control-chip active mode-chip" data-mode="default">Chat</div>
+            <div class="control-chip mode-chip" data-mode="plan">Plan</div>
+            
+            <div style="width:1px; height:20px; background:var(--border-color); margin: 0 4px;"></div>
+            
+            <div class="control-chip effort-chip" data-effort="low">Low</div>
+            <div class="control-chip effort-chip" data-effort="low">Low</div>
+            <div class="control-chip active effort-chip" data-effort="medium">Med</div>
+            <div class="control-chip effort-chip" data-effort="high">High</div>
+        </div>
+
+        <!-- Material Side Drawer (Chat History) -->
+        <div class="history-overlay" id="history-overlay"></div>
+        <div class="history-drawer" id="history-drawer">
+            <div class="drawer-header">
+                <h2>Recent Chats</h2>
+                <button class="close-drawer-btn" id="close-drawer-btn">✕</button>
+            </div>
+            <div class="drawer-search">
+                <input type="text" id="session-search-input" placeholder="Search past workspaces...">
+            </div>
+            <div class="session-list" id="session-list">
+                <!-- Session items populated via JS -->
+            </div>
+        </div>
+
+        <!-- Feed Container -->
+        <div class="canvas-container" id="canvas-feed">
+            <div class="feed-content" id="feed-content">
+                
+                <!-- Empty Greeting State -->
+                <div class="empty-state" id="empty-state">
+                    <div class="greeting">
+                        <span class="greeting-hello">Hello, User</span><br>
+                        <span class="greeting-help">How can I help you today?</span>
+                    </div>
+
+                    <div class="quick-pills">
+                        <button class="pill-btn" data-prompt="Analyze the codebase and plan an architecture">Analyze Codebase</button>
+                        <button class="pill-btn" data-prompt="Write a Python script to">Write Script</button>
+                        <button class="pill-btn" data-prompt="Help me debug an error">Debug Error</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Bottom Input Area -->
+        <div class="input-wrapper">
+            <div class="input-container-max">
+                
+                <!-- Stop Button (Appears when generating) -->
+                <div class="stop-btn-wrap" id="stop-btn-wrap" style="display: none;">
+                    <button class="gemini-stop-btn" id="stop-btn">
+                        <span></span> Stop generating
+                    </button>
+                </div>
+
+                <!-- Attached File Pill -->
+                <div class="attached-pill" id="attached-preview" style="display: none;">
+                    <span id="attached-thumb-container"></span>
+                    <span id="attached-filename">file.jpg</span>
+                    <button class="attached-pill-close" id="remove-attached-btn">×</button>
+                </div>
+
+                <!-- Input Pill -->
+                <div class="gemini-input-box">
+                    <input type="file" id="file-input" style="display: none;" accept="image/*,video/*,text/*,.pdf">
+                    
+                    <button class="input-btn" id="attach-btn" aria-label="Upload image">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="16"></line>
+                            <line x1="8" y1="12" x2="16" y2="12"></line>
+                        </svg>
+                    </button>
+                    
+                    <textarea id="prompt-input" rows="1" placeholder="Ask Gemini..." autocomplete="off"></textarea>
+                    
+                    <button class="input-btn" id="mic-btn" aria-label="Voice">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="22"></line>
+                        </svg>
+                    </button>
+
+                    <button class="input-btn send-btn" id="send-btn" disabled aria-label="Send">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div style="font-size: 11px; color: var(--text-secondary); text-align: center; margin-top: 8px;">
+                    Gemini may display inaccurate info, so double-check its responses.
+                </div>
+            </div>
+        </div>
+
+    </div>
+    
+    <script src="app.js?v=2"></script>
+</body>
+</html>
