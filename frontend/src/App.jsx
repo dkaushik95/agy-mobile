@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, Plus, Mic, Paperclip, Send, Square, Image as ImageIcon, Check, MessageSquare, Activity } from 'lucide-react';
+import { Menu, Plus, Mic, Paperclip, Send, Square, Image as ImageIcon, Check, MessageSquare, Activity, Bell } from 'lucide-react';
 import Message from './Message';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
@@ -29,6 +29,7 @@ function App() {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
+  const [isSubscribed, setIsSubscribed] = useState(false);
   
   const wsRef = useRef(null);
   const virtuosoRef = useRef(null);
@@ -36,10 +37,53 @@ function App() {
   useEffect(() => {
     initWebSocket();
     fetchSessions();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then((registration) => {
+        console.log('Service Worker registered with scope:', registration.scope);
+      }).catch((err) => console.error('Service worker registration failed:', err));
+    }
     return () => {
       if (wsRef.current) wsRef.current.close();
     };
   }, []);
+
+  const subscribeToNotifications = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('Push notifications are not supported by your browser.');
+      return;
+    }
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      
+      const response = await fetch('/api/vapidPublicKey');
+      const vapidPublicKey = await response.text();
+      
+      const padding = '='.repeat((4 - vapidPublicKey.length % 4) % 4);
+      const base64 = (vapidPublicKey + padding).replace(/\\-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: outputArray
+      });
+      
+      await fetch('/api/subscribe', {
+        method: 'POST',
+        body: JSON.stringify(subscription),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      setIsSubscribed(true);
+      alert('Subscribed successfully!');
+    } catch (error) {
+      console.error('Error subscribing:', error);
+      alert('Failed to subscribe to notifications.');
+    }
+  };
 
   const fetchSessions = async () => {
     try {
@@ -234,7 +278,10 @@ function App() {
               <span style={{ fontSize: 12, opacity: 0.6 }}>▼</span>
             </span>
           </div>
-          <div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="icon-btn" onClick={subscribeToNotifications} title="Enable Notifications">
+              <Bell size={20} color={isSubscribed ? 'var(--accent-color)' : 'currentColor'} />
+            </button>
             <button className="icon-btn" onClick={startNewChat}><Plus size={20} /></button>
           </div>
           

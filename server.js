@@ -6,6 +6,7 @@ const fs = require('fs');
 const { spawn, exec, execSync } = require('child_process');
 const crypto = require('crypto');
 const multer = require('multer');
+const webpush = require('web-push');
 
 const app = express();
 const server = http.createServer(app);
@@ -46,6 +47,37 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// Web Push Configuration
+const vapidKeys = JSON.parse(fs.readFileSync(path.join(__dirname, 'vapid_keys.json'), 'utf8'));
+webpush.setVapidDetails(
+    'mailto:test@test.com',
+    vapidKeys.publicKey,
+    vapidKeys.privateKey
+);
+
+let pushSubscriptions = [];
+const SUBSCRIPTIONS_FILE = path.join(__dirname, 'subscriptions.json');
+if (fs.existsSync(SUBSCRIPTIONS_FILE)) {
+    try { pushSubscriptions = JSON.parse(fs.readFileSync(SUBSCRIPTIONS_FILE, 'utf8')); } catch(e) {}
+}
+
+function saveSubscriptions() {
+    fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify(pushSubscriptions));
+}
+
+function sendPushNotification(payload) {
+    const promises = pushSubscriptions.map((sub) => 
+        webpush.sendNotification(sub, JSON.stringify(payload)).catch(err => {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+                // Subscription has expired or is no longer valid
+                pushSubscriptions = pushSubscriptions.filter(s => s.endpoint !== sub.endpoint);
+                saveSubscriptions();
+            }
+        })
+    );
+    Promise.all(promises);
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'frontend/dist')));
 
@@ -70,6 +102,21 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const fileUrl = `/uploads/${req.file.filename}`;
     res.json({ url: fileUrl, path: req.file.path, originalName: req.file.originalname });
+});
+
+// REST API: Web Push Subscription
+app.get('/api/vapidPublicKey', (req, res) => {
+    res.send(vapidKeys.publicKey);
+});
+
+app.post('/api/subscribe', (req, res) => {
+    const subscription = req.body;
+    const exists = pushSubscriptions.some(sub => sub.endpoint === subscription.endpoint);
+    if (!exists) {
+        pushSubscriptions.push(subscription);
+        saveSubscriptions();
+    }
+    res.status(201).json({});
 });
 
 // REST API: Telemetry
@@ -317,6 +364,13 @@ wss.on('connection', (ws) => {
                 currentProcess.on('close', (code) => {
                     currentProcess = null;
                     ws.send(JSON.stringify({ type: 'done', code }));
+                    
+                    // Send notification to phone
+                    sendPushNotification({
+                        title: 'Antigravity Agent',
+                        body: 'The agent has finished responding to your request.',
+                        icon: '/icon.svg'
+                    });
                 });
 
                 currentProcess.on('error', (err) => {
