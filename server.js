@@ -369,7 +369,8 @@ wss.on('connection', (ws) => {
                     sendPushNotification({
                         title: 'Antigravity Agent',
                         body: 'The agent has finished responding to your request.',
-                        icon: '/icon.svg'
+                        icon: '/favicon.svg',
+                        data: { url: `/?id=${conversationId}` }
                     });
                 });
 

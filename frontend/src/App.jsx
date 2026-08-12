@@ -42,6 +42,15 @@ function App() {
         console.log('Service Worker registered with scope:', registration.scope);
       }).catch((err) => console.error('Service worker registration failed:', err));
     }
+    
+    // Check for conversation ID in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const idFromUrl = urlParams.get('id');
+    if (idFromUrl) {
+      loadSession(idFromUrl);
+      window.history.replaceState({}, document.title, "/");
+    }
+
     return () => {
       if (wsRef.current) wsRef.current.close();
     };
