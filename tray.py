@@ -3,6 +3,18 @@ import subprocess
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter
 from PyQt6.QtCore import QTimer
+import socket
+
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
 
 def get_service_status():
     try:
@@ -62,8 +74,9 @@ class TrayApp:
     def update_status(self):
         is_active = get_service_status()
         if is_active:
+            ip = get_local_ip()
             self.tray.setIcon(self.icon_green)
-            self.tray.setToolTip("AGY Mobile: Running")
+            self.tray.setToolTip(f"AGY Mobile: Running\nhttp://{ip}:3900")
             self.action_start.setEnabled(False)
             self.action_stop.setEnabled(True)
         else:
