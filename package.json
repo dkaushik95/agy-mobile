@@ -1,12 +1,21 @@
 {
   "name": "agy-mobile",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Antigravity Mobile PWA Web Server and Tray Interface",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "build": "npm --prefix frontend run build",
+    "dev": "npm --prefix frontend run dev",
+    "lint": "npm --prefix frontend run lint",
+    "test": "echo \"No tests specified\" && exit 0"
   },
-  "keywords": [],
+  "keywords": [
+    "antigravity",
+    "agy",
+    "mobile",
+    "pwa"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

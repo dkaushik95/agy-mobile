@@ -4,3 +4,4 @@ dist/
 .DS_Store
 vapid_keys.json
 subscriptions.json
+public/uploads/

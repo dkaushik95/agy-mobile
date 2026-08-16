@@ -1,9 +1,10 @@
 import sys
 import subprocess
+import socket
+import webbrowser
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter
 from PyQt6.QtCore import QTimer
-import socket
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -18,7 +19,6 @@ def get_local_ip():
 
 def get_service_status():
     try:
-        # Check if the service is active
         res = subprocess.run(["systemctl", "--user", "is-active", "agy-mobile.service"], capture_output=True, text=True)
         return res.stdout.strip() == "active"
     except Exception:
@@ -29,6 +29,13 @@ def start_server():
 
 def stop_server():
     subprocess.run(["systemctl", "--user", "stop", "agy-mobile.service"])
+
+def restart_server():
+    subprocess.run(["systemctl", "--user", "restart", "agy-mobile.service"])
+
+def open_browser():
+    ip = get_local_ip()
+    webbrowser.open(f"http://{ip}:3900")
 
 def create_icon(color_name):
     pixmap = QPixmap(64, 64)
@@ -49,8 +56,16 @@ class TrayApp:
         
         self.menu = QMenu()
         
+        self.action_open = self.menu.addAction("Open AGY Mobile")
+        self.action_open.triggered.connect(open_browser)
+        
+        self.menu.addSeparator()
+
         self.action_start = self.menu.addAction("Start Server")
         self.action_start.triggered.connect(start_server)
+
+        self.action_restart = self.menu.addAction("Restart Server")
+        self.action_restart.triggered.connect(restart_server)
         
         self.action_stop = self.menu.addAction("Stop Server")
         self.action_stop.triggered.connect(stop_server)
@@ -60,6 +75,7 @@ class TrayApp:
         self.action_quit.triggered.connect(self.app.quit)
         
         self.tray.setContextMenu(self.menu)
+        self.tray.activated.connect(self.on_tray_activated)
         
         self.icon_green = create_icon("#10B981") # Tailwind Emerald 500
         self.icon_red = create_icon("#EF4444")   # Tailwind Red 500
@@ -71,18 +87,27 @@ class TrayApp:
         self.timer.timeout.connect(self.update_status)
         self.timer.start(2000)
         
+    def on_tray_activated(self, reason):
+        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
+            if get_service_status():
+                open_browser()
+
     def update_status(self):
         is_active = get_service_status()
         if is_active:
             ip = get_local_ip()
             self.tray.setIcon(self.icon_green)
             self.tray.setToolTip(f"AGY Mobile: Running\nhttp://{ip}:3900")
+            self.action_open.setEnabled(True)
             self.action_start.setEnabled(False)
+            self.action_restart.setEnabled(True)
             self.action_stop.setEnabled(True)
         else:
             self.tray.setIcon(self.icon_red)
             self.tray.setToolTip("AGY Mobile: Stopped")
+            self.action_open.setEnabled(False)
             self.action_start.setEnabled(True)
+            self.action_restart.setEnabled(False)
             self.action_stop.setEnabled(False)
 
     def run(self):

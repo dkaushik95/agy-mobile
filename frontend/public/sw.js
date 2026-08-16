@@ -1,18 +1,40 @@
+// Service Worker with aggressive cache-purge on activation to guarantee instant UI updates
+
+const _CACHE_NAME = 'agy-gemini-v5';
+
+self.addEventListener('install', function(_event) {
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', function(event) {
+    event.waitUntil(
+        caches.keys().then(function(cacheNames) {
+            return Promise.all(
+                cacheNames.map(function(cacheName) {
+                    return caches.delete(cacheName);
+                })
+            );
+        }).then(function() {
+            return self.clients.claim();
+        })
+    );
+});
+
 self.addEventListener('push', function(event) {
-    let payload = { title: 'Notification', body: 'New update available.', icon: '/favicon.svg' };
+    let payload = { title: 'Antigravity Agent', body: 'New response received.', icon: '/favicon.png' };
     
     if (event.data) {
         try {
             payload = event.data.json();
-        } catch (e) {
+        } catch {
             payload.body = event.data.text();
         }
     }
 
     const options = {
         body: payload.body,
-        icon: payload.icon || '/favicon.svg',
-        badge: '/favicon.svg',
+        icon: payload.icon || '/favicon.png',
+        badge: '/favicon.png',
         vibrate: [100, 50, 100],
         data: payload.data || { url: '/' }
     };
@@ -25,7 +47,6 @@ self.addEventListener('push', function(event) {
 self.addEventListener('notificationclick', function(event) {
     event.notification.close();
     
-    // Fallback to '/' if no url is provided
     const urlToOpen = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
 
     event.waitUntil(
