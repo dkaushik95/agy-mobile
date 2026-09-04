@@ -458,12 +458,18 @@ function App() {
 
   const startNewChat = () => {
     setMessages([]);
+    currentConversationIdRef.current = null;
     setCurrentConversationId(null);
     setDrawerOpen(false);
     setInput('');
     setAttachedFile(null);
     window.history.replaceState({}, document.title, '/');
   };
+
+  const currentConversationIdRef = useRef(currentConversationId);
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
 
   const pendingPromptRef = useRef(null);
 
@@ -478,8 +484,9 @@ function App() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      if (currentConversationId) {
-        ws.send(JSON.stringify({ type: 'attach', conversationId: currentConversationId }));
+      const activeId = currentConversationIdRef.current;
+      if (activeId) {
+        ws.send(JSON.stringify({ type: 'attach', conversationId: activeId }));
       }
       // Flush pending prompt if any
       if (pendingPromptRef.current) {
@@ -493,6 +500,7 @@ function App() {
         const data = JSON.parse(event.data);
 
         if (data.type === 'session_id') {
+          currentConversationIdRef.current = data.id;
           setCurrentConversationId(data.id);
           window.history.replaceState({}, document.title, `/?id=${data.id}`);
           fetchSessions();
@@ -548,7 +556,7 @@ function App() {
     ws.onerror = (err) => {
       console.warn('WebSocket error observed:', err);
     };
-  }, [currentConversationId]);
+  }, []);
 
   useEffect(() => {
     initWebSocket();

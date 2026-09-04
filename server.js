@@ -169,6 +169,16 @@ function getAvailableModels() {
 
     const fallbackModels = [
         {
+            id: 'gemini-3.8-flash',
+            name: 'Gemini 3.8 Flash',
+            shortName: '3.8 Flash',
+            category: 'gemini',
+            tag: 'Latest',
+            description: 'Next-gen multimodal speed & reasoning',
+            supportedEfforts: ['low', 'medium', 'high'],
+            defaultEffort: 'high'
+        },
+        {
             id: 'gemini-3.7-flash',
             name: 'Gemini 3.7 Flash',
             shortName: '3.7 Flash',
@@ -524,7 +534,10 @@ wss.on('connection', (ws) => {
                 const convDir = conversationId ? path.join(BRAIN_DIR, conversationId) : null;
                 const isExistingConv = convDir && fs.existsSync(convDir);
 
-                let args = ['--print', userPrompt, '--dangerously-skip-permissions', '--output-format', 'stream-json'];
+                let args = [
+                    '--dangerously-skip-permissions',
+                    '--output-format', 'stream-json'
+                ];
 
                 if (conversationId && isExistingConv) {
                     args.push('--conversation', conversationId);
@@ -537,7 +550,10 @@ wss.on('connection', (ws) => {
                 let exactModel = '';
                 const selectedEffort = (effort || 'high').toLowerCase();
 
-                if (model === 'flash' || model === 'gemini-3.7-flash') {
+                if (model === 'gemini-3.8-flash') {
+                    const eff = ['low', 'medium', 'high'].includes(selectedEffort) ? selectedEffort : 'high';
+                    exactModel = `gemini-3.8-flash-${eff}`;
+                } else if (model === 'flash' || model === 'gemini-3.7-flash') {
                     const eff = ['low', 'medium', 'high'].includes(selectedEffort) ? selectedEffort : 'high';
                     exactModel = `gemini-3.7-flash-${eff}`;
                 } else if (model === 'gemini-3.6-flash') {
@@ -567,6 +583,8 @@ wss.on('connection', (ws) => {
                 if (['low', 'medium', 'high'].includes(selectedEffort) && !exactModel.includes('-high') && !exactModel.includes('-medium') && !exactModel.includes('-low')) {
                     args.push('--effort', selectedEffort);
                 }
+
+                args.push('--print', userPrompt);
 
                 console.log(`[ws] Spawning: ${AGY_PATH} in ${customCwd} with args: ${args.join(' ')}`);
 
