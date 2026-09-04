@@ -21,7 +21,7 @@ self.addEventListener('activate', function(event) {
 });
 
 self.addEventListener('push', function(event) {
-    let payload = { title: 'Antigravity Agent', body: 'New response received.', icon: '/favicon.png' };
+    let payload = { title: 'OpenCode Mobile', body: 'New response received.', icon: '/favicon.png' };
     
     if (event.data) {
         try {

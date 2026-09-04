@@ -1,11 +1,11 @@
 {
-  "name": "Antigravity Mobile",
-  "short_name": "AGY Mobile",
-  "description": "Mobile PWA interface for Antigravity AI Agent",
+  "name": "OpenCode Mobile",
+  "short_name": "OpenCode",
+  "description": "Mobile interface for OpenCode AI agent",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#131314",
-  "theme_color": "#131314",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
   "orientation": "portrait-primary",
   "icons": [
     {
