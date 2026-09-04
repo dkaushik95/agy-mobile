@@ -252,26 +252,53 @@ function getAvailableModels() {
     ];
 
     try {
-        const stdout = execSync(`${AGY_PATH} models`, {
+        const stdout = execSync(`which opencode 2>/dev/null || which agy 2>/dev/null`, { encoding: 'utf8' }).trim();
+        const binPath = stdout || OPENCODE_PATH;
+        const modelsOutput = execSync(`${binPath} models 2>/dev/null || echo ""`, {
             encoding: 'utf8',
             timeout: 6000,
             env: { ...process.env, PATH: `${process.env.HOME}/.local/bin:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}` }
         });
         
-        const rawLines = stdout.split('\n');
-        const detectedMap = new Map();
+        const rawLines = modelsOutput.split('\n').map(l => l.trim()).filter(Boolean);
+        const list = [];
 
         for (const line of rawLines) {
-            const match = line.match(/^([a-z0-9\.\-]+)\s+(.+)$/i);
-            if (match) {
-                const modelId = match[1].trim();
-                const displayName = match[2].trim();
-                detectedMap.set(modelId, displayName);
+            let provider = 'Google';
+            let displayName = line;
+
+            if (line.includes('/')) {
+                const parts = line.split('/');
+                const p = parts[0];
+                const modelName = parts.slice(1).join('/');
+
+                if (p === 'opencode') {
+                    provider = 'OpenCode Zen';
+                    displayName = modelName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                } else if (p === 'google') {
+                    provider = 'Google';
+                    displayName = modelName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    if (modelName.includes('antigravity')) {
+                        displayName = `${displayName} (Antigravity)`;
+                    }
+                } else {
+                    provider = p.charAt(0).toUpperCase() + p.slice(1);
+                    displayName = modelName;
+                }
+            } else {
+                displayName = line.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             }
+
+            list.push({
+                id: line,
+                name: displayName,
+                provider: provider,
+                isFree: line.includes('free') || line.includes('pickle')
+            });
         }
         
-        if (detectedMap.size > 0) {
-            cachedModels = fallbackModels;
+        if (list.length > 0) {
+            cachedModels = list;
         } else {
             cachedModels = fallbackModels;
         }
@@ -283,6 +310,25 @@ function getAvailableModels() {
         return cachedModels;
     }
 }
+
+// REST API: Omarchy Theme Colors
+app.get('/api/theme', (req, res) => {
+    try {
+        const themePath = path.join(process.env.HOME, '.local/state/omarchy/current/theme/colors.toml');
+        if (fs.existsSync(themePath)) {
+            const content = fs.readFileSync(themePath, 'utf8');
+            const colors = {};
+            for (const line of content.split('\n')) {
+                const match = line.match(/^([a-z_]+)\s*=\s*"([^"]+)"/i);
+                if (match) {
+                    colors[match[1]] = match[2];
+                }
+            }
+            return res.json({ name: 'Omarchy Current', colors });
+        }
+    } catch (e) {}
+    res.json({ name: 'Default', colors: {} });
+});
 
 // REST API: Available Models
 app.get('/api/models', (req, res) => {
@@ -641,17 +687,26 @@ wss.on('connection', (ws) => {
                                     const step = obj.step_update;
                                     
                                     if (step.step_type === 'tool') {
-                                        let msg = `Running tool: ${step.tool_name || 'action'}`;
-                                        if (step.state === 'DONE') msg = `Completed: ${step.tool_name}`;
-                                        else if (step.state === 'ERROR') msg = `Failed: ${step.tool_name}`;
+                                        let title = step.title || step.tool_name || 'action';
+                                        let inputSummary = '';
+                                        if (step.input) {
+                                            if (typeof step.input === 'string') inputSummary = step.input;
+                                            else if (step.input.command) inputSummary = step.input.command;
+                                            else if (step.input.filePath || step.input.path) inputSummary = step.input.filePath || step.input.path;
+                                            else if (step.input.pattern) inputSummary = step.input.pattern;
+                                        }
+
+                                        let msg = `$ ${step.tool_name || 'tool'} ${inputSummary}`.trim();
+                                        if (step.state === 'DONE') msg = `✓ Completed: ${title}`;
+                                        else if (step.state === 'ERROR') msg = `✗ Failed: ${title}`;
                                         
                                         session.currentTool = msg;
-                                        const updateEvt = { type: 'tool_update', content: msg };
+                                        const updateEvt = { type: 'tool_call', toolName: step.tool_name, title: title, input: step.input, state: step.state || 'running', content: msg };
                                         session.events.push(updateEvt);
                                         broadcastToSession(conversationId, updateEvt);
                                     } else if (step.step_type === 'subagent') {
-                                        session.currentTool = 'Specialized subagent active...';
-                                        const updateEvt = { type: 'tool_update', content: 'Specialized subagent active...' };
+                                        session.currentTool = 'Subagent active...';
+                                        const updateEvt = { type: 'tool_update', content: 'Subagent active...' };
                                         session.events.push(updateEvt);
                                         broadcastToSession(conversationId, updateEvt);
                                     } else if (step.step_type === 'agent_response') {
@@ -660,11 +715,31 @@ wss.on('connection', (ws) => {
                                             const chunkEvt = { type: 'chunk', content: step.text_delta };
                                             session.events.push(chunkEvt);
                                             broadcastToSession(conversationId, chunkEvt);
-                                        } else if (step.thinking_delta) {
-                                            session.currentTool = 'Reasoning & synthesizing thoughts...';
-                                            broadcastToSession(conversationId, { type: 'tool_update', content: 'Reasoning & synthesizing thoughts...' });
                                         }
                                     }
+                                } else if (obj.type === 'tool_use' && obj.part) {
+                                    const part = obj.part;
+                                    const toolName = part.tool || 'tool';
+                                    const state = part.state || {};
+                                    const title = state.title || toolName;
+                                    const input = state.input || {};
+                                    const output = state.output || '';
+                                    
+                                    let msg = `$ ${toolName}`;
+                                    if (input.command) msg = `$ ${input.command}`;
+                                    else if (input.filePath || input.path) msg = `Read ${input.filePath || input.path}`;
+
+                                    const toolEvt = {
+                                        type: 'tool_call',
+                                        toolName,
+                                        title,
+                                        input,
+                                        output,
+                                        status: state.status || 'completed',
+                                        content: msg
+                                    };
+                                    session.events.push(toolEvt);
+                                    broadcastToSession(conversationId, toolEvt);
                                 } else if (obj.event === 'result') {
                                     if (obj.result && obj.result.status === 'ERROR') {
                                         const errEvt = { type: 'chunk', content: `\n\n**System Error:** ${obj.result.error || 'Execution failed'}` };
