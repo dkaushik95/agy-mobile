@@ -91,9 +91,11 @@ function sendPushNotification(payload) {
     Promise.all(promises).catch(() => {});
 }
 
+const OPENCODE_DB_PATH = path.join(process.env.HOME, '.local/share/opencode/opencode.db');
+
 // UUID validation helper for path security
 function isValidUUID(id) {
-    return typeof id === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
+    return typeof id === 'string' && (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id) || /^ses_[a-zA-Z0-9]+$/.test(id));
 }
 
 // ANSI Escape Code Stripper
@@ -350,45 +352,100 @@ app.get('/api/telemetry', (req, res) => {
 // REST API: Get Sessions List
 app.get('/api/sessions', (req, res) => {
     try {
-        if (!fs.existsSync(BRAIN_DIR)) return res.json([]);
-        const dirs = fs.readdirSync(BRAIN_DIR, { withFileTypes: true })
-            .filter(d => d.isDirectory() && isValidUUID(d.name))
-            .map(d => d.name);
-
         const sessions = [];
 
-        for (const dirName of dirs) {
-            const transcriptPath = path.join(BRAIN_DIR, dirName, '.system_generated', 'logs', 'transcript.jsonl');
-            if (fs.existsSync(transcriptPath)) {
-                try {
-                    const stats = fs.statSync(transcriptPath);
-                    const fileContent = fs.readFileSync(transcriptPath, 'utf8');
-                    const lines = fileContent.trim().split('\n').filter(Boolean);
-                    
-                    let firstPrompt = 'New Conversation';
-                    let messageCount = 0;
-                    let lastTimestamp = stats.mtime;
-
+        // 1. Fetch sessions from opencode.db if available
+        if (fs.existsSync(OPENCODE_DB_PATH)) {
+            try {
+                const dbCmd = `sqlite3 "${OPENCODE_DB_PATH}" "SELECT s.id, s.title, s.time_updated, (SELECT COUNT(*) FROM message m WHERE m.session_id = s.id) as msg_count FROM session s ORDER BY s.time_updated DESC LIMIT 100;"`;
+                const stdout = execSync(dbCmd, { encoding: 'utf8' }).trim();
+                if (stdout) {
+                    const lines = stdout.split('\n');
                     for (const line of lines) {
-                        try {
-                            const entry = JSON.parse(line);
-                            if (entry.type === 'USER_INPUT' && entry.content) {
-                                messageCount++;
-                                if (firstPrompt === 'New Conversation') {
-                                    firstPrompt = cleanUserPrompt(entry.content);
-                                }
-                            }
-                            if (entry.created_at) lastTimestamp = new Date(entry.created_at);
-                        } catch (e) {}
-                    }
+                        const firstPipe = line.indexOf('|');
+                        const secondPipe = line.indexOf('|', firstPipe + 1);
+                        const thirdPipe = line.indexOf('|', secondPipe + 1);
 
-                    sessions.push({
-                        id: dirName,
-                        title: firstPrompt.length > 60 ? firstPrompt.substring(0, 57) + '...' : firstPrompt,
-                        messageCount,
-                        updatedAt: lastTimestamp
-                    });
-                } catch (err) {}
+                        if (firstPipe !== -1 && secondPipe !== -1) {
+                            const id = line.substring(0, firstPipe);
+                            const rawTitle = line.substring(firstPipe + 1, secondPipe);
+                            let timeUpdated = line.substring(secondPipe + 1);
+                            let msgCountStr = '0';
+                            if (thirdPipe !== -1) {
+                                timeUpdated = line.substring(secondPipe + 1, thirdPipe);
+                                msgCountStr = line.substring(thirdPipe + 1);
+                            }
+
+                            let title = rawTitle || 'New Session';
+                            
+                            // Query first prompt text from part table
+                            try {
+                                const firstMsgCmd = `sqlite3 "${OPENCODE_DB_PATH}" "SELECT json_extract(data, '$.text') FROM part WHERE session_id = '${id}' AND json_extract(data, '$.type') = 'text' AND json_extract(data, '$.text') IS NOT NULL LIMIT 1;"`;
+                                const firstMsgOut = execSync(firstMsgCmd, { encoding: 'utf8' }).trim();
+                                if (firstMsgOut) {
+                                    const cleanText = cleanUserPrompt(firstMsgOut);
+                                    if (cleanText) {
+                                        title = cleanText.split('\n')[0];
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('Error fetching first prompt:', e);
+                            }
+                            
+                            sessions.push({
+                                id,
+                                title: title.length > 60 ? title.substring(0, 57) + '...' : title,
+                                messageCount: parseInt(msgCountStr, 10) || 0,
+                                updatedAt: new Date(parseInt(timeUpdated, 10))
+                            });
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to read sessions from opencode.db:', err);
+            }
+        }
+
+        // 2. Fallback or merge with legacy BRAIN_DIR if needed
+        if (fs.existsSync(BRAIN_DIR)) {
+            const existingIds = new Set(sessions.map(s => s.id));
+            const dirs = fs.readdirSync(BRAIN_DIR, { withFileTypes: true })
+                .filter(d => d.isDirectory() && isValidUUID(d.name) && !existingIds.has(d.name))
+                .map(d => d.name);
+
+            for (const dirName of dirs) {
+                const transcriptPath = path.join(BRAIN_DIR, dirName, '.system_generated', 'logs', 'transcript.jsonl');
+                if (fs.existsSync(transcriptPath)) {
+                    try {
+                        const stats = fs.statSync(transcriptPath);
+                        const fileContent = fs.readFileSync(transcriptPath, 'utf8');
+                        const lines = fileContent.trim().split('\n').filter(Boolean);
+                        
+                        let firstPrompt = 'New Conversation';
+                        let messageCount = 0;
+                        let lastTimestamp = stats.mtime;
+
+                        for (const line of lines) {
+                            try {
+                                const entry = JSON.parse(line);
+                                if (entry.type === 'USER_INPUT' && entry.content) {
+                                    messageCount++;
+                                    if (firstPrompt === 'New Conversation') {
+                                        firstPrompt = cleanUserPrompt(entry.content);
+                                    }
+                                }
+                                if (entry.created_at) lastTimestamp = new Date(entry.created_at);
+                            } catch (e) {}
+                        }
+
+                        sessions.push({
+                            id: dirName,
+                            title: firstPrompt.length > 60 ? firstPrompt.substring(0, 57) + '...' : firstPrompt,
+                            messageCount,
+                            updatedAt: lastTimestamp
+                        });
+                    } catch (err) {}
+                }
             }
         }
 
@@ -406,6 +463,71 @@ app.get('/api/sessions/:id', (req, res) => {
         return res.status(400).json({ error: 'Invalid session ID format' });
     }
 
+    // 1. Try reading from opencode.db first if session ID starts with ses_ or exists in db
+    if (fs.existsSync(OPENCODE_DB_PATH)) {
+        try {
+            const checkCmd = `sqlite3 "${OPENCODE_DB_PATH}" "SELECT id FROM session WHERE id = '${sessionId}' LIMIT 1;"`;
+            const exists = execSync(checkCmd, { encoding: 'utf8' }).trim();
+
+            if (exists) {
+                const partsCmd = `sqlite3 "${OPENCODE_DB_PATH}" "SELECT m.id as msg_id, m.data as msg_data, p.data as part_data FROM message m JOIN part p ON m.id = p.message_id WHERE m.session_id = '${sessionId}' ORDER BY m.time_created ASC, p.time_created ASC;"`;
+                const stdout = execSync(partsCmd, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }).trim();
+
+                const messagesMap = new Map();
+
+                if (stdout) {
+                    const rows = stdout.split('\n');
+                    for (const row of rows) {
+                        const firstPipe = row.indexOf('|');
+                        const secondPipe = row.indexOf('|', firstPipe + 1);
+                        if (firstPipe === -1 || secondPipe === -1) continue;
+
+                        const msgId = row.substring(0, firstPipe);
+                        const msgDataRaw = row.substring(firstPipe + 1, secondPipe);
+                        const partDataRaw = row.substring(secondPipe + 1);
+
+                        try {
+                            const msgData = JSON.parse(msgDataRaw);
+                            const partData = JSON.parse(partDataRaw);
+
+                            if (!messagesMap.has(msgId)) {
+                                messagesMap.set(msgId, {
+                                    id: msgId,
+                                    role: msgData.role,
+                                    content: '',
+                                    toolCalls: [],
+                                    timestamp: msgData.time ? msgData.time.created : Date.now()
+                                });
+                            }
+
+                            const currentMsg = messagesMap.get(msgId);
+
+                            if (partData.type === 'text' && partData.text) {
+                                currentMsg.content = (currentMsg.content ? currentMsg.content + '\n' : '') + partData.text;
+                            } else if (partData.type === 'tool') {
+                                const toolCallObj = {
+                                    toolName: partData.tool || 'tool',
+                                    title: partData.title || partData.tool,
+                                    input: partData.state ? partData.state.input : {},
+                                    output: partData.state ? partData.state.output : '',
+                                    status: partData.state ? partData.state.status : 'completed',
+                                    content: `$ ${partData.tool || 'tool'} ${partData.state && partData.state.input && partData.state.input.command ? partData.state.input.command : ''}`.trim()
+                                };
+                                currentMsg.toolCalls.push(toolCallObj);
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                const messagesList = Array.from(messagesMap.values());
+                return res.json({ id: sessionId, messages: messagesList });
+            }
+        } catch (err) {
+            console.error('Failed to load session details from opencode.db:', err);
+        }
+    }
+
+    // 2. Fallback to legacy BRAIN_DIR
     const sessionDir = path.resolve(BRAIN_DIR, sessionId);
     if (!sessionDir.startsWith(BRAIN_DIR)) {
         return res.status(403).json({ error: 'Forbidden' });
@@ -465,6 +587,14 @@ app.delete('/api/sessions/:id', (req, res) => {
     const sessionId = req.params.id;
     if (!isValidUUID(sessionId)) {
         return res.status(400).json({ error: 'Invalid session ID format' });
+    }
+
+    // Try deleting from opencode.db if exists
+    if (fs.existsSync(OPENCODE_DB_PATH)) {
+        try {
+            const delCmd = `sqlite3 "${OPENCODE_DB_PATH}" "DELETE FROM session WHERE id = '${sessionId}';"`;
+            execSync(delCmd, { encoding: 'utf8' });
+        } catch (e) {}
     }
 
     const targetDir = path.resolve(BRAIN_DIR, sessionId);
