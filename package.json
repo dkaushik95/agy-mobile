@@ -1,7 +1,7 @@
 {
-  "name": "agy-mobile",
+  "name": "opencode-mobile",
   "version": "1.0.0",
-  "description": "Antigravity Mobile PWA Web Server and Tray Interface",
+  "description": "OpenCode Mobile PWA Web Server and Tray Interface",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,8 +11,7 @@
     "test": "echo \"No tests specified\" && exit 0"
   },
   "keywords": [
-    "antigravity",
-    "agy",
+    "opencode",
     "mobile",
     "pwa"
   ],
@@ -20,6 +19,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "express": "^5.2.1",
     "multer": "^2.2.0",
     "web-push": "^3.6.7",

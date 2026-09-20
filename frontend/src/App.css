@@ -160,6 +160,7 @@ body, html {
   background-color: var(--bg-dark);
   padding-top: calc(44px + env(safe-area-inset-top, 0px));
   padding-bottom: 70px;
+  touch-action: pan-y;
 }
 
 .welcome-container {
@@ -543,4 +544,223 @@ body, html {
 }
 .tui-drawer-panel.open {
   transform: translateX(0);
+}
+.tui-drawer-panel.dragging {
+  transition: none;
+}
+
+/* ---------- Chat status states & animations ---------- */
+
+/* Message entrance */
+.message-row {
+  animation: msgIn 0.3s ease both;
+}
+
+/* Assistant card by status */
+.message-row.msg-thinking .tui-response-card {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(99, 212, 230, 0.15);
+}
+.message-row.msg-streaming .tui-response-card {
+  border-color: rgba(99, 212, 230, 0.5);
+}
+.message-row.msg-error .tui-response-card {
+  border-color: var(--accent-red);
+}
+.message-row.msg-error {
+  animation: msgShake 0.4s ease;
+}
+
+/* Thinking indicator (animated dots) */
+.tui-thinking {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+  color: var(--text-muted);
+}
+.tui-thinking-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+.tui-thinking-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  font-style: normal;
+  animation: thinkingDot 1s ease-in-out infinite;
+}
+.tui-thinking-dots i:nth-child(2) { animation-delay: 0.15s; }
+.tui-thinking-dots i:nth-child(3) { animation-delay: 0.3s; }
+.tui-thinking-label {
+  font-size: 12.5px;
+  font-style: italic;
+}
+
+/* Streaming caret */
+.m3-streaming-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1.05em;
+  margin-left: 2px;
+  background: var(--accent-cyan);
+  vertical-align: text-bottom;
+  animation: cursorBlink 0.9s steps(2, start) infinite;
+}
+
+/* Stopped tag */
+.tui-stopped-tag {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.75;
+}
+
+/* Error banner + retry */
+.tui-error-banner {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--accent-red);
+  border-left: 3.5px solid var(--accent-red);
+  border-radius: 3px;
+  background: rgba(160, 40, 60, 0.08);
+  color: var(--accent-red);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.tui-error-text {
+  word-break: break-word;
+  flex: 1;
+}
+.tui-retry-btn {
+  background: var(--accent-red);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tui-retry-btn:active { opacity: 0.7; }
+
+/* Stop button replacing send while generating */
+.tui-stop-btn {
+  background: var(--accent-red);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 8px;
+  animation: stopPulse 1.2s ease-in-out infinite;
+}
+
+.tui-send-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.tui-textarea:disabled {
+  opacity: 0.55;
+}
+
+/* Connection status chip */
+.tui-conn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+.tui-conn-chip:not(.open) { cursor: pointer; }
+.tui-conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-green);
+}
+.tui-conn-chip.open .tui-conn-dot {
+  background: var(--accent-green);
+  box-shadow: 0 0 6px 1px var(--accent-green);
+}
+.tui-conn-chip.connecting .tui-conn-dot,
+.tui-conn-chip.reconnecting .tui-conn-dot {
+  background: var(--accent-yellow);
+  animation: pulse 1s ease-in-out infinite;
+}
+.tui-conn-chip.offline .tui-conn-dot {
+  background: var(--accent-red);
+}
+
+/* Modal pop-in */
+.tui-modal-content {
+  animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes msgShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes thinkingDot {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.15); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes stopPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 109, 0.5); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 77, 109, 0); }
+}
+
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-row,
+  .tui-modal-content {
+    animation: none;
+  }
+  .m3-streaming-cursor,
+  .tui-thinking-dots i,
+  .tui-conn-chip.connecting .tui-conn-dot,
+  .tui-conn-chip.reconnecting .tui-conn-dot,
+  .tui-stop-btn {
+    animation: none;
+  }
 }

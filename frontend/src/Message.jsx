@@ -3,7 +3,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
-function MessageComponent({ msg }) {
+function MessageComponent({ msg, onRetry }) {
   const contentRef = useRef(null);
   const [expandedTools, setExpandedTools] = useState({});
 
@@ -60,9 +60,13 @@ function MessageComponent({ msg }) {
   }
 
   const toolCalls = msg.toolCalls || [];
+  const thinking = msg.status === 'thinking';
+  const streaming = msg.status === 'streaming';
+  const failed = msg.status === 'error';
+  const stopped = msg.status === 'stopped';
 
   return (
-    <div className="message-row">
+    <div className={`message-row ${msg.status ? 'msg-' + msg.status : ''}`}>
       {/* Individual Tool Call Execution Cards ($ bash / tool) */}
       {toolCalls.map((tool, idx) => {
         const isExpanded = !!expandedTools[idx];
@@ -113,14 +117,36 @@ function MessageComponent({ msg }) {
       )}
 
       {/* Assistant Response Card */}
-      {content && (
-        <div className="tui-response-card">
+      <div className="tui-response-card">
+        {thinking && (
+          <div className="tui-thinking">
+            <span className="tui-thinking-dots"><i /><i /><i /></span>
+            <span className="tui-thinking-label">{msg.activity || 'Thinking…'}</span>
+          </div>
+        )}
+
+        {content && (
           <div className="markdown-content">
             <div ref={contentRef} dangerouslySetInnerHTML={{ __html: html }} />
-            {msg.isStreaming && <span className="m3-streaming-cursor" />}
+            {streaming && <span className="m3-streaming-cursor" />}
           </div>
-        </div>
-      )}
+        )}
+
+        {stopped && (
+          <div className="tui-stopped-tag">Stopped by user</div>
+        )}
+
+        {failed && (
+          <div className="tui-error-banner">
+            <span className="tui-error-text">{msg.error || 'Request failed'}</span>
+            {onRetry && (
+              <button className="tui-retry-btn" onClick={() => onRetry(msg)}>
+                Retry
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
