@@ -2,6 +2,9 @@ node_modules/
 dist/
 .env
 .DS_Store
+paired_devices.json
 vapid_keys.json
 subscriptions.json
 public/uploads/
+__pycache__/
+*.pyc

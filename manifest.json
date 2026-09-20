@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "custom.opencode-mobile",
+  "name": "OpenCode Mobile",
+  "version": "1.0.0",
+  "author": "OpenCode Mobile",
+  "description": "Control and monitor the OpenCode Mobile web server",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "OpenCode Mobile",
+    "description": "OpenCode Mobile Status & Controls",
+    "category": "Controls",
+    "allowMultiple": false
+  }
+}

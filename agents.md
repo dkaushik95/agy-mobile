@@ -1,22 +1,22 @@
-# Instructions for AI Agents Working on AGY Mobile
+# Instructions for AI Agents Working on OpenCode Mobile
 
-This document outlines the architecture and workflow for agents working on the AGY Mobile repository.
+This document outlines the architecture and workflow for agents working on the OpenCode Mobile repository.
 
 ## Architecture Overview
 
 This project consists of three main components:
-1. **Node.js Backend (`server.js`)**: An Express and WebSocket server that interfaces with the Antigravity (`agy`) CLI. It reads session transcripts from `~/.gemini/antigravity-cli/brain` and forwards them to connected clients. It also provides basic REST APIs for telemetry and file uploads.
-2. **React Frontend (`frontend/`)**: A Vite-powered React application using Framer Motion for animations and DOMPurify/Marked for markdown rendering. Built to be mobile-friendly.
-3. **System Tray App (`tray.py`)**: A PyQt6-based system tray icon that interacts with systemctl to start and stop the `agy-mobile.service`.
+1. **Node.js Backend (`server.js`)**: An Express and WebSocket server that interfaces with OpenCode / Antigravity agents. It queries session records via `better-sqlite3` (`~/.local/share/opencode/opencode.db`) or legacy brain transcripts (`~/.gemini/antigravity-cli/brain`) and streams real-time updates to connected clients.
+2. **React Frontend (`frontend/`)**: A Vite-powered React application with an optimized terminal feed, DOMPurify/Marked markdown rendering, and service worker push notification support.
+3. **System Tray App (`tray.py`)**: A PyQt6-based system tray icon that interacts with systemctl to start and stop the `opencode-mobile.service`.
 
 ## Development Workflow
 
-- **Backend Changes**: Modify `server.js`. Test by restarting the Node process. Be mindful of how it spawns child processes for `agy`.
-- **Frontend Changes**: Navigate to the `frontend/` directory. Use `npm run dev` for hot-reloading. The backend serves the built assets from `frontend/dist` in production, so ensure you run `npm run build` after finalizing frontend changes if testing the full stack via `server.js`.
+- **Backend Changes**: Modify `server.js`. Test by restarting the Node process. Be mindful of CIDR IP allowlisting, auth tokens, path security, and child process lifecycle.
+- **Frontend Changes**: Navigate to the `frontend/` directory. Use `npm run dev` for hot-reloading. The backend serves the built assets from `frontend/dist` in production, so run `npm run build` after finalizing frontend changes.
 - **Tray Changes**: Modify `tray.py`. Requires restarting the Python script. Ensure `systemctl --user` commands match the user's environment.
 
 ## Key Considerations
 
-- The backend dynamically locates the `agy` executable. When debugging execution issues, verify `AGY_PATH` resolution logic.
-- Ensure any new REST API routes in `server.js` are properly prefixed with `/api/` to avoid conflicts with static file serving.
-- For UI changes, prioritize a responsive, mobile-first design using the existing Tailwind/React patterns.
+- The backend dynamically resolves CLI binary paths.
+- Ensure all REST API routes in `server.js` are properly prefixed with `/api/` and covered by auth and IP middleware.
+- Keep agent process lifecycle clean, bounding session memory and avoiding race conditions between successive prompt runs.
